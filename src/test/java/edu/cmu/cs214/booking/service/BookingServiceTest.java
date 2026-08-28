@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import edu.cmu.cs214.booking.domain.Room;
 import edu.cmu.cs214.booking.domain.TimeInterval;
 import edu.cmu.cs214.booking.domain.User;
+import edu.cmu.cs214.booking.domain.Booking;
 import edu.cmu.cs214.booking.repo.InMemoryBookingStore;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class BookingServiceTest {
@@ -15,6 +17,7 @@ class BookingServiceTest {
     private final Room roomB = new Room("B", "Beta", 4);
     private final User alice = new User("u1", "Alice");
     private final User bob = new User("u2", "Bob");
+    private final User carol = new User("u3", "Carol");
 
     private BookingService newService() {
         return new BookingService(new InMemoryBookingStore());
@@ -71,6 +74,39 @@ class BookingServiceTest {
         svc.cancelBooking("does-not-exist");
 
         assertEquals(1, svc.listBookings(roomA).size());
+    }
+
+    @Test
+    void waitlistedUserIsPromotedWhenBookingAheadIsCancelled() {
+        BookingService svc = newService();
+        BookingResult aliceResult = svc.book(roomA, alice, new TimeInterval(600, 660));
+        String aliceBookingId = ((BookingResult.Confirmed) aliceResult).booking().id();
+        assertInstanceOf(
+            BookingResult.Waitlisted.class,
+            svc.book(roomA, bob, new TimeInterval(630, 700)));
+
+        svc.cancelBooking(aliceBookingId);
+
+        List<Booking> bookings = svc.listBookings(roomA);
+        assertEquals(1, bookings.size());
+        assertEquals(bob, bookings.get(0).user());
+        assertEquals(new TimeInterval(630, 700), bookings.get(0).interval());
+    }
+
+    @Test
+    void waiterStillConflictingWithARemainingBookingIsNotPromoted() {
+        BookingService svc = newService();
+        BookingResult aliceResult = svc.book(roomA, alice, new TimeInterval(600, 660));
+        String aliceBookingId = ((BookingResult.Confirmed) aliceResult).booking().id();
+        svc.book(roomA, bob, new TimeInterval(700, 800));
+        // Carol's interval overlaps Alice (cancelled) but also Bob (stays), so no promotion.
+        svc.book(roomA, carol, new TimeInterval(630, 720));
+
+        svc.cancelBooking(aliceBookingId);
+
+        List<Booking> bookings = svc.listBookings(roomA);
+        assertEquals(1, bookings.size());
+        assertEquals(bob, bookings.get(0).user());
     }
 
     @Test
