@@ -6,6 +6,7 @@ import edu.cmu.cs214.booking.domain.TimeInterval;
 import edu.cmu.cs214.booking.domain.User;
 import edu.cmu.cs214.booking.domain.WaitlistEntry;
 import edu.cmu.cs214.booking.repo.BookingStore;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -50,11 +51,29 @@ public class BookingService {
     /**
      * Cancels the confirmed booking with {@code bookingId}, freeing its slot. If no
      * booking has that id, does nothing.
+     *
+     * <p>After removal, promotes at most one waiter for that room: the
+     * earliest-waiting user (by {@code seq}) whose interval does not overlap any
+     * remaining confirmed booking becomes a confirmed booking and their waitlist
+     * entry is removed. If no waiter fits, none is promoted.
      */
     public void cancelBooking(String bookingId) {
-        if (store.findBooking(bookingId).isEmpty()) {
+        var target = store.findBooking(bookingId);
+        if (target.isEmpty()) {
             return;
         }
+        Room room = target.get().room();
         store.removeBooking(bookingId);
+
+        store.waitlistForRoom(room).stream()
+            .sorted(Comparator.comparingInt(WaitlistEntry::seq))
+            .filter(w -> store.bookingsForRoom(room).stream()
+                .noneMatch(b -> b.interval().overlaps(w.interval())))
+            .findFirst()
+            .ifPresent(w -> {
+                store.addBooking(
+                    new Booking("b" + nextBookingSeq++, room, w.user(), w.interval()));
+                store.removeWaitlistEntry(w.id());
+            });
     }
 }
