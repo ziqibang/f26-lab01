@@ -1,7 +1,9 @@
 package edu.cmu.cs214.booking.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import edu.cmu.cs214.booking.domain.Room;
 import edu.cmu.cs214.booking.domain.TimeInterval;
@@ -107,6 +109,39 @@ class BookingServiceTest {
         List<Booking> bookings = svc.listBookings(roomA);
         assertEquals(1, bookings.size());
         assertEquals(bob, bookings.get(0).user());
+    }
+
+    @Test
+    void isAvailableTrueWhenRoomIsFree() {
+        BookingService svc = newService();
+        assertTrue(svc.isAvailable(roomA, new TimeInterval(600, 660)));
+    }
+
+    @Test
+    void isAvailableFalseWhenAnExistingBookingEnclosesTheQuery() {
+        BookingService svc = newService();
+        svc.book(roomA, alice, new TimeInterval(600, 660));
+        // Query 630-650 sits entirely inside the existing 600-660 booking: a clash.
+        // The buggy check only tests the existing booking's start (600), which is
+        // not inside [630, 650), so it wrongly reports the room as available.
+        assertFalse(svc.isAvailable(roomA, new TimeInterval(630, 650)));
+    }
+
+    @Test
+    void isAvailableFalseWhenTheQueryOverlapsTheEndOfAnExistingBooking() {
+        BookingService svc = newService();
+        svc.book(roomA, alice, new TimeInterval(600, 660));
+        // Query 640-680 overlaps 640-660. Existing start 600 is not in [640, 680),
+        // so the buggy check misses it.
+        assertFalse(svc.isAvailable(roomA, new TimeInterval(640, 680)));
+    }
+
+    @Test
+    void isAvailableTrueForABackToBackInterval() {
+        BookingService svc = newService();
+        svc.book(roomA, alice, new TimeInterval(600, 660));
+        // Half-open intervals that merely touch do not overlap.
+        assertTrue(svc.isAvailable(roomA, new TimeInterval(660, 720)));
     }
 
     @Test
