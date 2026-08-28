@@ -42,15 +42,13 @@ public class BookingService {
         store.addBooking(booking);
         return new BookingResult.Confirmed(booking);
     }
-
-
     /**
      * Reports whether {@code room} is free over {@code interval}, so callers can
      * check availability before attempting to book.
      */
     public boolean isAvailable(Room room, TimeInterval interval) {
         for (Booking b : store.bookingsForRoom(room)) {
-            if (b.interval().start() >= interval.start() && b.interval().start() < interval.end()) {
+            if (b.interval().overlaps(interval)) {
                 return false;
             }
         }
