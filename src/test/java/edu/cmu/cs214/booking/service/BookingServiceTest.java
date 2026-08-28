@@ -52,6 +52,28 @@ class BookingServiceTest {
     }
 
     @Test
+    void cancelBookingFreesTheSlot() {
+        BookingService svc = newService();
+        BookingResult first = svc.book(roomA, alice, new TimeInterval(600, 660));
+        String id = ((BookingResult.Confirmed) first).booking().id();
+
+        svc.cancelBooking(id);
+
+        BookingResult r = svc.book(roomA, bob, new TimeInterval(630, 700));
+        assertInstanceOf(BookingResult.Confirmed.class, r);
+    }
+
+    @Test
+    void cancelUnknownBookingIdIsANoOp() {
+        BookingService svc = newService();
+        svc.book(roomA, alice, new TimeInterval(600, 660));
+
+        svc.cancelBooking("does-not-exist");
+
+        assertEquals(1, svc.listBookings(roomA).size());
+    }
+
+    @Test
     void listBookingsReturnsConfirmedBookings() {
         BookingService svc = newService();
         svc.book(roomA, alice, new TimeInterval(600, 660));
